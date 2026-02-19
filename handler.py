@@ -77,30 +77,32 @@ def start_comfyui():
 def check_models():
     """Check if required models are available on network storage"""
     required_models = {
-        "wan_checkpoint": f"{MODELS_BASE}/diffusion_models/wan_2.2.safetensors",
-        "z_image": f"{MODELS_BASE}/diffusion_models/z-image-turbo.safetensors"
+        "unet_high_noise": f"{MODELS_BASE}/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors",
+        "unet_low_noise": f"{MODELS_BASE}/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors",
+        "vae": f"{MODELS_BASE}/vae/wan_2.1_vae.safetensors",
+        "clip": f"{MODELS_BASE}/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
     }
     
     available = {}
     for name, path in required_models.items():
         available[name] = os.path.exists(path)
-        logger.info(f"📁 Model {name}: {'✅ Found' if available[name] else '❌ Missing'} at {path}")
+        logger.info(f"🔍 Model {name}: {'✅ Found' if available[name] else '❌ Missing'} at {path}")
     
     return available
 
-def load_workflow_template(workflow_type="wan-t2v"):
+def load_workflow_template(workflow_type="test-workflow-api"):
     """Load workflow JSON from network storage"""
     workflow_path = f"{WORKFLOWS_BASE}/{workflow_type}.json"
     
     # Fallback to basic WAN workflow if file not found
     if not os.path.exists(workflow_path):
-        logger.warning(f"⚠️  Workflow {workflow_path} not found, using basic template")
+        logger.warning(f"⚠️ Workflow {workflow_path} not found, using basic template")
         return get_basic_wan_workflow()
     
     try:
         with open(workflow_path, 'r') as f:
             workflow = json.load(f)
-        logger.info(f"📋 Loaded workflow: {workflow_path}")
+        logger.info(f"📄 Loaded workflow: {workflow_path}")
         return workflow
     except Exception as e:
         logger.error(f"❌ Error loading workflow: {e}")
@@ -151,7 +153,7 @@ def submit_workflow(workflow, prompt="", seed=None):
         if response.status_code != 200:
             logger.error(f"❌ Failed to submit workflow: {response.status_code}")
             return None
-            
+        
         result = response.json()
         prompt_id = result["prompt_id"]
         logger.info(f"📤 Workflow submitted: {prompt_id}")
