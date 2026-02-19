@@ -77,8 +77,8 @@ def start_comfyui():
 def check_models():
     """Check if required models are available on network storage"""
     required_models = {
-        "wan_checkpoint": f"{MODELS_BASE}/checkpoints/wan_2.2.safetensors",
-        "z_image": f"{MODELS_BASE}/checkpoints/z-image-turbo.safetensors"
+        "wan_checkpoint": f"{MODELS_BASE}/diffusion_models/wan_2.2.safetensors",
+        "z_image": f"{MODELS_BASE}/diffusion_models/z-image-turbo.safetensors"
     }
     
     available = {}
