@@ -1,0 +1,61 @@
+{
+  "name": "ComfyUI-WAN Serverless Demo (v2)",
+  "description": "Serverless ComfyUI pour WAN 2.2 two-stage (T2V/I2V) avec network storage. Optimisé pour démo NSFW/action LoRAs, cold start rapide, metrics auto. Économies 57% vs pod 24/7.",
+  "type": "public",
+  "categories": [
+    "ComfyUI",
+    "WAN 2.2",
+    "Serverless",
+    "Video Generation",
+    "AI Workloads"
+  ],
+  "logo": "https://raw.githubusercontent.com/moltowski/runpod-serverless-demo-prod/main/logo.png",
+  "image": "moltowski/comfyui-serverless-demo:v2",
+  "gpu_types": [
+    "NVIDIA RTX 4090",
+    "NVIDIA RTX 4090 PRO",
+    "NVIDIA L40"
+  ],
+  "min_gpus": 1,
+  "max_gpus": 1,
+  "vcpu_count": 8,
+  "min_vcpu_count": 4,
+  "ram": 32,
+  "min_ram": 16,
+  "disk_size_gb": 50,
+  "env": [
+    {
+      "name": "RUNPOD_API_KEY",
+      "display_name": "RunPod API Key",
+      "type": "password",
+      "info": "Pour internal calls si besoin",
+      "required": false
+    }
+  ],
+  "network_volume": {
+    "mount_path": "/workspace",
+    "description": "Mount network storage pour models/LoRAs/workflows (1TB recommandé)"
+  },
+  "flashboot": true,
+  "ports": [
+    {
+      "name": "ComfyUI API",
+      "port": 8188,
+      "protocol": "TCP",
+      "description": "Internal pour handler, pas exposé"
+    }
+  ],
+  "setup_commands": [
+    "echo 'Template ready for WAN serverless demo!'"
+  ],
+  "run_commands": [
+    "python /handler.py"
+  ],
+  "exposed_ports": [8188],
+  "contact_info": {
+    "name": "Jeff Mollet",
+    "email": "mollet.geoffrey@gmail.com"
+  },
+  "version": "2.0.0",
+  "changelog": "v2: Intégration workflow two-stage WAN, LoRA dynamic, network storage paths, metrics pour démo (2026-02-19)"
+}
