@@ -1,0 +1,27 @@
+# RunPod Serverless ComfyUI-WAN Requirements
+# Core dependencies for the handler
+
+# RunPod SDK
+runpod>=1.7.0
+
+# HTTP requests
+requests>=2.31.0
+
+# Image/video processing
+Pillow>=10.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# ML/AI libraries
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+safetensors>=0.4.0
+accelerate>=0.24.0
+transformers>=4.35.0
+
+# Hugging Face integration
+huggingface_hub>=0.19.0
+
+# Utilities
+pathlib2>=2.3.0
