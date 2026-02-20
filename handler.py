@@ -36,6 +36,27 @@ def ensure_directories():
     for dir_path in dirs:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
+def ensure_comfyui_models_linked():
+    """Link ComfyUI models dir to network volume so ComfyUI finds models at /ComfyUI/models/"""
+    import shutil
+    comfy_models = "/ComfyUI/models"
+    volume_models = "/runpod-volume/ComfyUI/models"
+    if not os.path.exists(volume_models):
+        return
+    if os.path.islink(comfy_models):
+        return
+    if os.path.exists(comfy_models):
+        try:
+            shutil.rmtree(comfy_models)
+        except Exception as e:
+            logger.warning(f"Could not remove {comfy_models}: {e}")
+            return
+    try:
+        os.symlink(volume_models, comfy_models)
+        logger.info(f"✅ Linked {comfy_models} -> {volume_models}")
+    except Exception as e:
+        logger.warning(f"Could not symlink models: {e}")
+
 def start_comfyui():
     """Start ComfyUI server in background"""
     global comfy_process, comfy_ready
@@ -44,6 +65,7 @@ def start_comfyui():
         return
     
     logger.info("🚀 Starting ComfyUI server...")
+    ensure_comfyui_models_linked()
     start_time = time.time()
     
     try:
