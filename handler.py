@@ -24,10 +24,10 @@ comfy_process = None
 comfy_ready = False
 boot_start_time = time.time()
 
-# Network storage paths (mounted at /workspace)
-MODELS_BASE = "/workspace/ComfyUI/models"
-WORKFLOWS_BASE = "/workspace/workflows"
-OUTPUT_BASE = "/workspace/temp"
+# Network storage paths (RunPod mounts network volume at /runpod-volume)
+MODELS_BASE = "/runpod-volume/ComfyUI/models"
+WORKFLOWS_BASE = "/runpod-volume/workflows"
+OUTPUT_BASE = "/runpod-volume/temp"
 COMFY_OUTPUT = "/ComfyUI/output"
 
 def ensure_directories():
