@@ -25,7 +25,7 @@ comfy_ready = False
 boot_start_time = time.time()
 
 # Network storage paths (mounted at /workspace)
-MODELS_BASE = "/workspace/models"
+MODELS_BASE = "/workspace/ComfyUI/models"
 WORKFLOWS_BASE = "/workspace/workflows"
 OUTPUT_BASE = "/workspace/temp"
 COMFY_OUTPUT = "/ComfyUI/output"
