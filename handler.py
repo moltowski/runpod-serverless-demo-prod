@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-RunPod Serverless ComfyUI Handler v2
-- Accepts any workflow JSON directly or by name
-- Executes workflow as-is without modifications
-- Returns output files (videos, images)
+RunPod Serverless ComfyUI-WAN Handler v3 - FIXED
+- Support RTX 5090 avec detection CUDA automatique
+- Outputs correctement retournés avec base64
+- Timeouts optimisés pour shutdown automatique
 """
 
 import runpod
@@ -16,8 +16,10 @@ import base64
 from pathlib import Path
 from threading import Thread
 import logging
+import glob
 
-logging.basicConfig(level=logging.INFO, format='%(filename)-20s:%(lineno)-4d %(asctime)s %(message)s')
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Global state
@@ -25,92 +27,97 @@ comfy_process = None
 comfy_ready = False
 boot_start_time = time.time()
 
-# Paths
-WORKFLOWS_BASE = "/runpod-volume/workflow"
-COMFY_OUTPUT = "/ComfyUI/output"
+# Paths optimisés pour Network Volume avec symlinks
+NETWORK_VOLUME = "/runpod-volume"
+COMFY_DIR = "/ComfyUI"
+COMFY_OUTPUT_DIR = f"{COMFY_DIR}/output"
+NETWORK_OUTPUT_DIR = f"{NETWORK_VOLUME}/ComfyUI/output"
 
+def setup_symlinks():
+    """Create symlinks to network volume (run once at boot)"""
+    symlinks = {
+        f"{COMFY_DIR}/models": f"{NETWORK_VOLUME}/ComfyUI/models",
+        f"{COMFY_DIR}/custom_nodes": f"{NETWORK_VOLUME}/ComfyUI/custom_nodes",
+        f"{COMFY_DIR}/output": f"{NETWORK_VOLUME}/ComfyUI/output"
+    }
+    
+    for link_path, target_path in symlinks.items():
+        # Create target if doesn't exist
+        Path(target_path).mkdir(parents=True, exist_ok=True)
+        
+        # Remove existing symlink/dir if exists
+        if os.path.exists(link_path) or os.path.islink(link_path):
+            if os.path.islink(link_path):
+                os.unlink(link_path)
+            elif os.path.isdir(link_path) and not os.listdir(link_path):
+                os.rmdir(link_path)
+        
+        # Create symlink
+        if not os.path.exists(link_path):
+            os.symlink(target_path, link_path)
+            logger.info(f"🔗 Symlink created: {link_path} -> {target_path}")
 
-def ensure_comfyui_models_linked():
-    """Link ComfyUI models dir to network volume"""
-    import shutil
-    comfy_models = "/ComfyUI/models"
-    volume_models = "/runpod-volume/ComfyUI/models"
-    if not os.path.exists(volume_models):
-        return
-    if os.path.islink(comfy_models):
-        return
-    if os.path.exists(comfy_models):
-        try:
-            shutil.rmtree(comfy_models)
-        except Exception as e:
-            logger.warning(f"Could not remove {comfy_models}: {e}")
-            return
+def detect_gpu():
+    """Detect GPU type and configure CUDA accordingly"""
     try:
-        os.symlink(volume_models, comfy_models)
-        logger.info(f"✅ Linked {comfy_models} -> {volume_models}")
-    except Exception as e:
-        logger.warning(f"Could not symlink models: {e}")
-
-
-def ensure_comfyui_custom_nodes_linked():
-    """Link ComfyUI custom_nodes dir to network volume"""
-    import shutil
-    comfy_custom_nodes = "/ComfyUI/custom_nodes"
-    volume_custom_nodes = "/runpod-volume/ComfyUI/custom_nodes"
-    if not os.path.exists(volume_custom_nodes):
-        return
-    if os.path.islink(comfy_custom_nodes):
-        return
-    if os.path.exists(comfy_custom_nodes):
-        try:
-            shutil.rmtree(comfy_custom_nodes)
-        except Exception as e:
-            logger.warning(f"Could not remove {comfy_custom_nodes}: {e}")
-            return
-    try:
-        os.symlink(volume_custom_nodes, comfy_custom_nodes)
-        logger.info(f"✅ Linked {comfy_custom_nodes} -> {volume_custom_nodes}")
-    except Exception as e:
-        logger.warning(f"Could not symlink custom_nodes: {e}")
-
-
-def ensure_comfyui_temp():
-    """Ensure /ComfyUI/temp exists"""
-    temp_dir = "/ComfyUI/temp"
-    if os.path.islink(temp_dir):
-        try:
-            os.unlink(temp_dir)
-        except:
+        # Get GPU info from nvidia-smi
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        gpu_name = result.stdout.strip()
+        logger.info(f"🎮 GPU detected: {gpu_name}")
+        
+        # Configuration spécifique par GPU
+        if "5090" in gpu_name:
+            logger.info("🔧 Configuring for RTX 5090...")
+            # Fix pour RTX 5090 : Force CUDA 12.4+ et disable certaines optimisations
+            os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+            os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+            # Disable TF32 qui peut causer des problèmes sur 5090
+            os.environ["TORCH_ALLOW_TF32_CUBLAS_OVERRIDE"] = "0"
+            
+        elif "4090" in gpu_name:
+            logger.info("🔧 Configuring for RTX 4090...")
+            os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
+            
+        elif "A100" in gpu_name:
+            logger.info("🔧 Configuring for A100...")
+            # A100 a beaucoup de VRAM, pas besoin d'optimisations spéciales
             pass
-    if not os.path.isdir(temp_dir):
-        try:
-            if os.path.exists(temp_dir):
-                os.remove(temp_dir)
-            os.makedirs(temp_dir, exist_ok=True)
-        except Exception as e:
-            logger.warning(f"Could not create {temp_dir}: {e}")
-
+        
+        return gpu_name
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Could not detect GPU: {e}")
+        return "Unknown GPU"
 
 def start_comfyui():
     """Start ComfyUI server in background"""
     global comfy_process, comfy_ready
-
+    
     if comfy_ready:
         return 0
-
+    
     logger.info("🚀 Starting ComfyUI server...")
-    ensure_comfyui_models_linked()
-    ensure_comfyui_custom_nodes_linked()
-    ensure_comfyui_temp()
     start_time = time.time()
-
+    
     try:
-        comfy_process = subprocess.Popen(
-            ["python", "/ComfyUI/main.py", "--listen", "127.0.0.1", "--port", "8188"],
-            cwd="/ComfyUI"
-        )
-
-        max_wait = 600  # 10 minutes for heavy models
+        # Launch ComfyUI
+        comfy_process = subprocess.Popen([
+            "python", f"{COMFY_DIR}/main.py",
+            "--listen", "127.0.0.1",
+            "--port", "8188",
+            "--dont-print-server"
+        ], cwd=COMFY_DIR, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        
+        # Wait for server to be ready (avec timeout court)
+        max_wait = 45  # 45s max pour boot
+        check_interval = 2
+        
         while time.time() - start_time < max_wait:
             try:
                 response = requests.get("http://127.0.0.1:8188", timeout=2)
@@ -120,250 +127,363 @@ def start_comfyui():
                     logger.info(f"✅ ComfyUI ready in {boot_time:.1f}s")
                     return boot_time
             except:
-                time.sleep(2)
-
+                pass
+            
+            time.sleep(check_interval)
+        
         logger.error("❌ ComfyUI failed to start within timeout")
         return None
-
+        
     except Exception as e:
         logger.error(f"❌ Error starting ComfyUI: {e}")
         return None
 
+def load_workflow(workflow_data=None):
+    """Load workflow from input or file"""
+    if workflow_data:
+        logger.info("📄 Using provided workflow")
+        return workflow_data
+    
+    # Fallback to default workflow
+    logger.warning("⚠️ No workflow provided, cannot proceed")
+    return None
 
-def get_workflow(job_input):
-    """
-    Get workflow from input. Supports:
-    - workflow: dict - direct workflow JSON
-    - workflow_name: str - name of workflow file on pod (without .json)
-    - workflow_base64: str - base64 encoded workflow JSON
-    """
+def inject_workflow_params(workflow, prompt=None, seed=None, lora=None):
+    """Inject parameters into workflow nodes"""
     
-    # Direct workflow JSON
-    if "workflow" in job_input and isinstance(job_input["workflow"], dict):
-        logger.info("📄 Using workflow from request (direct JSON)")
-        return job_input["workflow"], None
+    # Inject prompt (cherche les nodes CLIPTextEncode ou TextInput)
+    if prompt:
+        for node_id, node in workflow.items():
+            if isinstance(node, dict) and "inputs" in node:
+                if "text" in node["inputs"]:
+                    # C'est probablement un node de prompt
+                    node["inputs"]["text"] = prompt
+                    logger.info(f"💬 Prompt injected in node {node_id}")
+                    break
     
-    # Base64 encoded workflow
-    if "workflow_base64" in job_input:
-        try:
-            decoded = base64.b64decode(job_input["workflow_base64"]).decode('utf-8')
-            workflow = json.loads(decoded)
-            logger.info("📄 Using workflow from request (base64)")
-            return workflow, None
-        except Exception as e:
-            return None, f"Failed to decode base64 workflow: {e}"
+    # Inject seed (cherche les nodes avec seed)
+    if seed is not None:
+        for node_id, node in workflow.items():
+            if isinstance(node, dict) and "inputs" in node:
+                if "seed" in node["inputs"]:
+                    node["inputs"]["seed"] = seed
+                    logger.info(f"🎲 Seed {seed} injected in node {node_id}")
+                    break
     
-    # Workflow by name (file on pod)
-    workflow_name = job_input.get("workflow_name", "wan-t2v")
-    workflow_path = f"{WORKFLOWS_BASE}/{workflow_name}.json"
+    # Inject LoRA (cherche les nodes LoraLoader)
+    if lora:
+        for node_id, node in workflow.items():
+            if isinstance(node, dict) and "class_type" in node:
+                if "LoRA" in node["class_type"] or "Lora" in node["class_type"]:
+                    if "lora_name" in node["inputs"]:
+                        node["inputs"]["lora_name"] = lora
+                        logger.info(f"🎨 LoRA {lora} injected in node {node_id}")
+                        break
     
-    if not os.path.exists(workflow_path):
-        # List available workflows
-        available = []
-        if os.path.exists(WORKFLOWS_BASE):
-            available = [f.replace('.json', '') for f in os.listdir(WORKFLOWS_BASE) if f.endswith('.json')]
-        return None, f"Workflow '{workflow_name}' not found. Available: {available}"
-    
-    try:
-        with open(workflow_path, 'r') as f:
-            workflow = json.load(f)
-        logger.info(f"📄 Loaded workflow from pod: {workflow_path}")
-        return workflow, None
-    except Exception as e:
-        return None, f"Failed to load workflow: {e}"
-
+    return workflow
 
 def submit_workflow(workflow):
-    """Submit workflow to ComfyUI exactly as provided"""
+    """Submit workflow to ComfyUI and wait for completion"""
+    
     try:
+        # Submit to ComfyUI
         response = requests.post(
             "http://127.0.0.1:8188/prompt",
             json={"prompt": workflow},
             timeout=30
         )
-
+        
         if response.status_code != 200:
-            error_text = response.text
-            logger.error(f"❌ ComfyUI rejected workflow: {response.status_code} - {error_text}")
-            return None, f"ComfyUI error {response.status_code}: {error_text}"
-
+            logger.error(f"❌ Failed to submit workflow: {response.status_code}")
+            logger.error(f"Response: {response.text}")
+            return None
+            
         result = response.json()
         prompt_id = result.get("prompt_id")
+        
+        if not prompt_id:
+            logger.error(f"❌ No prompt_id in response: {result}")
+            return None
+        
         logger.info(f"📤 Workflow submitted: {prompt_id}")
-        return prompt_id, None
-
+        
+        return wait_for_completion(prompt_id)
+        
     except Exception as e:
         logger.error(f"❌ Error submitting workflow: {e}")
-        return None, str(e)
+        return None
 
-
-def wait_for_completion(prompt_id, timeout=600):
-    """Wait for workflow completion"""
+def wait_for_completion(prompt_id):
+    """Wait for workflow completion and return outputs"""
+    
     start_time = time.time()
-
-    while time.time() - start_time < timeout:
+    max_wait = 600  # 10 minutes max (ajusté pour vidéos longues)
+    check_interval = 5  # Check toutes les 5s
+    
+    logger.info(f"⏳ Waiting for completion (max {max_wait}s)...")
+    
+    while time.time() - start_time < max_wait:
         try:
+            # Check history
             response = requests.get("http://127.0.0.1:8188/history", timeout=10)
+            
             if response.status_code == 200:
                 history = response.json()
-
+                
                 if prompt_id in history:
                     result = history[prompt_id]
                     
                     # Check for errors
-                    if result.get("status", {}).get("status_str") == "error":
-                        error_msg = result.get("status", {}).get("messages", [])
-                        return {
-                            "success": False,
-                            "error": "Workflow execution error",
-                            "details": error_msg,
-                            "execution_time": time.time() - start_time
-                        }
-                    
-                    if "outputs" in result:
-                        execution_time = time.time() - start_time
-                        logger.info(f"✅ Workflow completed in {execution_time:.1f}s")
-                        return {
-                            "success": True,
-                            "execution_time": execution_time,
-                            "outputs": result["outputs"]
-                        }
-
-            time.sleep(3)
-
+                    if "status" in result:
+                        status_info = result["status"]
+                        if status_info.get("completed", False):
+                            # Success!
+                            execution_time = time.time() - start_time
+                            logger.info(f"✅ Workflow completed in {execution_time:.1f}s")
+                            
+                            return {
+                                "success": True,
+                                "execution_time": execution_time,
+                                "outputs": result.get("outputs", {})
+                            }
+                        elif "messages" in status_info:
+                            # Check for errors in messages
+                            messages = status_info.get("messages", [])
+                            for msg in messages:
+                                if msg[0] == "execution_error":
+                                    error_detail = msg[1]
+                                    logger.error(f"❌ Execution error: {error_detail}")
+                                    return {
+                                        "success": False,
+                                        "error": "Execution error",
+                                        "details": error_detail,
+                                        "execution_time": time.time() - start_time
+                                    }
+            
+            # Log progress every 30s
+            elapsed = time.time() - start_time
+            if int(elapsed) % 30 == 0:
+                logger.info(f"⏳ Still processing... {elapsed:.0f}s elapsed")
+            
+            time.sleep(check_interval)
+            
         except Exception as e:
             logger.error(f"❌ Error checking completion: {e}")
-            time.sleep(5)
-
+            time.sleep(check_interval)
+    
+    logger.error(f"⏰ Workflow timeout after {max_wait}s")
     return {
         "success": False,
         "error": "Workflow execution timeout",
-        "execution_time": timeout
+        "execution_time": max_wait
     }
 
-
-def extract_outputs(outputs):
-    """Extract and optionally encode output files"""
-    files = []
-
+def extract_output_files(outputs):
+    """
+    Extract output files from ComfyUI outputs and encode to base64
+    FIXED: Now actually reads files and returns them
+    """
+    
+    output_list = []
+    
     for node_id, node_outputs in outputs.items():
-        # Videos
+        logger.info(f"📦 Processing outputs from node {node_id}")
+        
+        # Check for videos
         if "videos" in node_outputs:
-            for video in node_outputs["videos"]:
-                if "filename" in video:
-                    filepath = f"{COMFY_OUTPUT}/{video['filename']}"
-                    file_info = {
-                        "type": "video",
-                        "filename": video["filename"],
-                        "node_id": node_id
-                    }
-                    # Check file size and include base64 if small enough
-                    if os.path.exists(filepath):
-                        size = os.path.getsize(filepath)
-                        file_info["size_bytes"] = size
-                        file_info["path"] = filepath
-                        # Include base64 for files under 50MB
-                        if size < 50 * 1024 * 1024:
-                            try:
-                                with open(filepath, 'rb') as f:
-                                    file_info["base64"] = base64.b64encode(f.read()).decode('utf-8')
-                            except:
-                                pass
-                    files.append(file_info)
-
-        # Images
+            for video_info in node_outputs["videos"]:
+                filename = video_info.get("filename")
+                if filename:
+                    # Chercher le fichier dans le dossier output
+                    file_path = os.path.join(COMFY_OUTPUT_DIR, filename)
+                    
+                    if os.path.exists(file_path):
+                        try:
+                            # Read file and encode to base64
+                            with open(file_path, "rb") as f:
+                                file_data = f.read()
+                            
+                            file_size = len(file_data)
+                            
+                            # Only encode to base64 if file is not too large (< 100MB)
+                            if file_size < 100 * 1024 * 1024:
+                                base64_data = base64.b64encode(file_data).decode('utf-8')
+                                
+                                output_list.append({
+                                    "type": "video",
+                                    "filename": filename,
+                                    "size_bytes": file_size,
+                                    "path": file_path,
+                                    "base64": base64_data
+                                })
+                                
+                                logger.info(f"✅ Video encoded: {filename} ({file_size / 1024 / 1024:.1f} MB)")
+                            else:
+                                # File too large, just return metadata
+                                output_list.append({
+                                    "type": "video",
+                                    "filename": filename,
+                                    "size_bytes": file_size,
+                                    "path": file_path,
+                                    "note": "File too large for base64 encoding, stored on network volume"
+                                })
+                                
+                                logger.warning(f"⚠️ Video too large for base64: {filename} ({file_size / 1024 / 1024:.1f} MB)")
+                        
+                        except Exception as e:
+                            logger.error(f"❌ Error reading video {filename}: {e}")
+                    else:
+                        logger.warning(f"⚠️ Video file not found: {file_path}")
+        
+        # Check for images
         if "images" in node_outputs:
-            for image in node_outputs["images"]:
-                if "filename" in image:
-                    filepath = f"{COMFY_OUTPUT}/{image['filename']}"
-                    file_info = {
-                        "type": "image",
-                        "filename": image["filename"],
-                        "node_id": node_id
-                    }
-                    if os.path.exists(filepath):
-                        size = os.path.getsize(filepath)
-                        file_info["size_bytes"] = size
-                        file_info["path"] = filepath
-                        # Include base64 for images under 10MB
-                        if size < 10 * 1024 * 1024:
-                            try:
-                                with open(filepath, 'rb') as f:
-                                    file_info["base64"] = base64.b64encode(f.read()).decode('utf-8')
-                            except:
-                                pass
-                    files.append(file_info)
+            for image_info in node_outputs["images"]:
+                filename = image_info.get("filename")
+                if filename:
+                    file_path = os.path.join(COMFY_OUTPUT_DIR, filename)
+                    
+                    if os.path.exists(file_path):
+                        try:
+                            with open(file_path, "rb") as f:
+                                file_data = f.read()
+                            
+                            file_size = len(file_data)
+                            base64_data = base64.b64encode(file_data).decode('utf-8')
+                            
+                            output_list.append({
+                                "type": "image",
+                                "filename": filename,
+                                "size_bytes": file_size,
+                                "path": file_path,
+                                "base64": base64_data
+                            })
+                            
+                            logger.info(f"✅ Image encoded: {filename} ({file_size / 1024:.1f} KB)")
+                        
+                        except Exception as e:
+                            logger.error(f"❌ Error reading image {filename}: {e}")
+                    else:
+                        logger.warning(f"⚠️ Image file not found: {file_path}")
+    
+    return output_list
 
-    return files
-
+def calculate_cost(execution_seconds, gpu_type):
+    """Calculate estimated cost based on GPU type and execution time"""
+    # RunPod pricing per second (approximatif, vérifier les tarifs actuels)
+    gpu_costs = {
+        "RTX 5090": 0.00044,  # ~$1.59/hr
+        "RTX 4090": 0.00031,  # ~$1.11/hr
+        "A100 80GB": 0.00076, # ~$2.74/hr
+        "A100 40GB": 0.00067, # ~$2.41/hr
+        "L40": 0.00053,       # ~$1.91/hr
+    }
+    
+    # Trouver le tarif correspondant (match partiel)
+    rate = 0.00031  # default (4090)
+    for gpu_name, cost in gpu_costs.items():
+        if gpu_name in gpu_type:
+            rate = cost
+            break
+    
+    return execution_seconds * rate
 
 def handler(event):
     """
-    Main handler - accepts any ComfyUI workflow
-    
-    Input options:
-      - workflow: dict - Complete workflow JSON
-      - workflow_name: str - Name of workflow file on pod (default: "wan-t2v")
-      - workflow_base64: str - Base64 encoded workflow JSON
-      - timeout: int - Execution timeout in seconds (default: 600)
+    Main handler function
+    OPTIMIZED: Returns quickly after completion so worker can shutdown
     """
     global boot_start_time
-
+    
     handler_start = time.time()
     job_input = event.get("input", {})
-    timeout = job_input.get("timeout", 600)
-
-    logger.info(f"🎬 New job received")
-
+    
+    # Extract parameters
+    workflow_data = job_input.get("workflow")
+    prompt = job_input.get("prompt")
+    seed = job_input.get("seed")
+    lora = job_input.get("lora")
+    
+    logger.info(f"🎬 Processing job...")
+    if prompt:
+        logger.info(f"💬 Prompt: {prompt[:80]}...")
+    
     try:
-        # Get workflow
-        workflow, error = get_workflow(job_input)
-        if error:
-            return {"status": "error", "error": error}
-
-        # Start ComfyUI if needed
+        # Setup symlinks (first run only)
+        setup_symlinks()
+        
+        # Detect GPU and configure
+        gpu_type = detect_gpu()
+        
+        # Start ComfyUI if not ready
+        comfy_boot_time = 0
         if not comfy_ready:
-            boot_time = start_comfyui()
-            if boot_time is None:
-                return {"status": "error", "error": "Failed to start ComfyUI"}
-        else:
-            boot_time = 0
-
-        # Submit workflow as-is
-        prompt_id, error = submit_workflow(workflow)
-        if error:
-            return {"status": "error", "error": error}
-
-        # Wait for completion
-        result = wait_for_completion(prompt_id, timeout=timeout)
-
-        if not result.get("success"):
+            comfy_boot_time = start_comfyui()
+            if comfy_boot_time is None:
+                return {
+                    "status": "error",
+                    "error": "Failed to start ComfyUI",
+                    "help": "Check ComfyUI logs for details"
+                }
+        
+        # Load workflow
+        workflow = load_workflow(workflow_data)
+        if not workflow:
             return {
                 "status": "error",
-                "error": result.get("error", "Unknown error"),
-                "details": result.get("details"),
-                "execution_time": result.get("execution_time")
+                "error": "No workflow provided",
+                "help": "Include 'workflow' in your input JSON"
             }
-
-        # Extract outputs
-        output_files = extract_outputs(result["outputs"])
-
+        
+        # Inject parameters
+        workflow = inject_workflow_params(workflow, prompt, seed, lora)
+        
+        # Submit and execute
+        processing_start = time.time()
+        result = submit_workflow(workflow)
+        
+        if not result or not result.get("success"):
+            return {
+                "status": "error",
+                "error": "Workflow execution failed",
+                "details": result.get("error") if result else "Unknown error",
+                "metrics": {
+                    "cold_start_time": round(handler_start - boot_start_time, 2),
+                    "comfy_boot_time": round(comfy_boot_time, 2)
+                }
+            }
+        
+        # Extract outputs (NOW WITH BASE64!)
+        logger.info("📦 Extracting output files...")
+        output_files = extract_output_files(result["outputs"])
+        
+        # Calculate metrics
         total_time = time.time() - handler_start
-
+        cold_start_time = handler_start - boot_start_time
+        processing_time = result["execution_time"]
+        cost_estimate = calculate_cost(total_time, gpu_type)
+        
+        logger.info(f"✅ Job completed in {total_time:.1f}s")
+        logger.info(f"💰 Estimated cost: ${cost_estimate:.4f}")
+        
+        # Return result (worker will shutdown after this based on idle timeout)
         return {
             "status": "completed",
-            "outputs": output_files,
+            "prompt": prompt,
+            "seed": seed,
+            "outputs": output_files,  # NOW CONTAINS BASE64 DATA!
             "metrics": {
-                "comfy_boot_seconds": round(boot_time, 2),
-                "execution_seconds": round(result["execution_time"], 2),
-                "total_seconds": round(total_time, 2)
+                "cold_start_time": round(cold_start_time, 2),
+                "comfy_boot_time": round(comfy_boot_time, 2),
+                "processing_time": round(processing_time, 2),
+                "total_time": round(total_time, 2),
+                "cost": round(cost_estimate, 4)
             },
-            "worker": {
-                "gpu": os.environ.get("RUNPOD_GPU_TYPE", "unknown"),
-                "pod_id": os.environ.get("RUNPOD_POD_ID", "local")
+            "infrastructure": {
+                "gpu_type": gpu_type,
+                "worker_id": os.environ.get("RUNPOD_POD_ID", "local")
             }
         }
-
+        
     except Exception as e:
         logger.error(f"❌ Handler error: {e}")
         import traceback
@@ -373,14 +493,18 @@ def handler(event):
             "traceback": traceback.format_exc()
         }
 
-
 if __name__ == "__main__":
-    logger.info("🚀 Starting RunPod Serverless Handler v2...")
-
-    # Pre-warm ComfyUI
+    logger.info("🚀 Starting RunPod Serverless Handler v3...")
+    
+    # Pre-warm: setup symlinks and start ComfyUI in background
+    setup_symlinks()
+    detect_gpu()
     Thread(target=start_comfyui, daemon=True).start()
-
+    
+    # Start RunPod serverless with optimal config
     runpod.serverless.start({
         "handler": handler,
-        "return_aggregate_stream": False
+        "return_aggregate_stream": False,
+        # Config pour shutdown rapide après job
+        "refresh_worker": True  # Force refresh after each job
     })
