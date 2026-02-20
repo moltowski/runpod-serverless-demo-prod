@@ -107,6 +107,7 @@ def start_comfyui():
     
     try:
         # Launch ComfyUI
+        logger.info(f"📂 ComfyUI directory: {COMFY_DIR}")
         comfy_process = subprocess.Popen([
             "python", f"{COMFY_DIR}/main.py",
             "--listen", "127.0.0.1",
@@ -114,11 +115,33 @@ def start_comfyui():
             "--dont-print-server"
         ], cwd=COMFY_DIR, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
-        # Wait for server to be ready (avec timeout court)
-        max_wait = 45  # 45s max pour boot
-        check_interval = 2
+        logger.info(f"🔄 ComfyUI process started (PID: {comfy_process.pid})")
+        
+        # Wait for server to be ready (timeout augmenté pour 5090)
+        max_wait = 120  # 2 minutes max pour boot (5090 peut être lent)
+        check_interval = 3
+        last_log = 0
         
         while time.time() - start_time < max_wait:
+            elapsed = time.time() - start_time
+            
+            # Log progress every 15s
+            if int(elapsed) - last_log >= 15:
+                logger.info(f"⏳ Still waiting for ComfyUI... {elapsed:.0f}s elapsed")
+                last_log = int(elapsed)
+                
+                # Check if process is still running
+                if comfy_process.poll() is not None:
+                    logger.error(f"❌ ComfyUI process died (exit code: {comfy_process.returncode})")
+                    # Try to get stderr
+                    try:
+                        stderr = comfy_process.stderr.read().decode('utf-8')
+                        if stderr:
+                            logger.error(f"ComfyUI stderr: {stderr[:500]}")
+                    except:
+                        pass
+                    return None
+            
             try:
                 response = requests.get("http://127.0.0.1:8188", timeout=2)
                 if response.status_code == 200:
@@ -131,7 +154,13 @@ def start_comfyui():
             
             time.sleep(check_interval)
         
-        logger.error("❌ ComfyUI failed to start within timeout")
+        logger.error(f"❌ ComfyUI failed to start within {max_wait}s timeout")
+        
+        # Try to get process output for debugging
+        if comfy_process.poll() is None:
+            logger.error("⚠️ Process still running but not responding")
+        else:
+            logger.error(f"⚠️ Process exited with code: {comfy_process.returncode}")
         return None
         
     except Exception as e:
