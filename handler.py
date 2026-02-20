@@ -72,9 +72,8 @@ def start_comfyui():
         comfy_process = subprocess.Popen([
             "python", "/ComfyUI/main.py",
             "--listen", "127.0.0.1",
-            "--port", "8188",
-            "--dont-print-server"
-        ], cwd="/ComfyUI", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            "--port", "8188"
+        ], cwd="/ComfyUI")
         
         # Wait for server to be ready (14B models can take 6-10 min to load)
         max_wait = 600  # 10 minutes
