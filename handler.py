@@ -57,6 +57,23 @@ def ensure_comfyui_models_linked():
     except Exception as e:
         logger.warning(f"Could not symlink models: {e}")
 
+def ensure_comfyui_temp():
+    """Ensure /ComfyUI/temp exists as a directory (ComfyUI needs it)"""
+    import shutil
+    temp_dir = "/ComfyUI/temp"
+    if os.path.islink(temp_dir):
+        try:
+            os.unlink(temp_dir)
+        except:
+            pass
+    if not os.path.isdir(temp_dir):
+        try:
+            if os.path.exists(temp_dir):
+                os.remove(temp_dir)
+            os.makedirs(temp_dir, exist_ok=True)
+        except Exception as e:
+            logger.warning(f"Could not create {temp_dir}: {e}")
+
 def start_comfyui():
     """Start ComfyUI server in background"""
     global comfy_process, comfy_ready
@@ -66,6 +83,7 @@ def start_comfyui():
     
     logger.info("🚀 Starting ComfyUI server...")
     ensure_comfyui_models_linked()
+    ensure_comfyui_temp()
     start_time = time.time()
     
     try:
