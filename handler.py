@@ -54,8 +54,8 @@ def start_comfyui():
             "--dont-print-server"
         ], cwd="/ComfyUI", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
-        # Wait for server to be ready
-        max_wait = 60  # seconds
+        # Wait for server to be ready (14B models need 2-4 min to load)
+        max_wait = 300  # 5 minutes
         while time.time() - start_time < max_wait:
             try:
                 response = requests.get("http://127.0.0.1:8188", timeout=2)
