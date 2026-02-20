@@ -26,7 +26,7 @@ boot_start_time = time.time()
 
 # Network storage paths (RunPod mounts network volume at /runpod-volume)
 MODELS_BASE = "/runpod-volume/ComfyUI/models"
-WORKFLOWS_BASE = "/runpod-volume/workflows"
+WORKFLOWS_BASE = "/runpod-volume/workflow"
 OUTPUT_BASE = "/runpod-volume/temp"
 COMFY_OUTPUT = "/ComfyUI/output"
 
