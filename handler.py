@@ -80,7 +80,7 @@ def check_models():
         "unet_high_noise": f"{MODELS_BASE}/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors",
         "unet_low_noise": f"{MODELS_BASE}/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors",
         "vae": f"{MODELS_BASE}/vae/wan_2.1_vae.safetensors",
-        "clip": f"{MODELS_BASE}/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+        "clip": f"{MODELS_BASE}/clip/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
     }
     
     available = {}
