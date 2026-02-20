@@ -57,6 +57,27 @@ def ensure_comfyui_models_linked():
     except Exception as e:
         logger.warning(f"Could not symlink models: {e}")
 
+def ensure_comfyui_custom_nodes_linked():
+    """Link ComfyUI custom_nodes dir to network volume so ComfyUI finds custom nodes"""
+    import shutil
+    comfy_custom_nodes = "/ComfyUI/custom_nodes"
+    volume_custom_nodes = "/runpod-volume/ComfyUI/custom_nodes"
+    if not os.path.exists(volume_custom_nodes):
+        return
+    if os.path.islink(comfy_custom_nodes):
+        return
+    if os.path.exists(comfy_custom_nodes):
+        try:
+            shutil.rmtree(comfy_custom_nodes)
+        except Exception as e:
+            logger.warning(f"Could not remove {comfy_custom_nodes}: {e}")
+            return
+    try:
+        os.symlink(volume_custom_nodes, comfy_custom_nodes)
+        logger.info(f"✅ Linked {comfy_custom_nodes} -> {volume_custom_nodes}")
+    except Exception as e:
+        logger.warning(f"Could not symlink custom_nodes: {e}")
+
 def ensure_comfyui_temp():
     """Ensure /ComfyUI/temp exists as a directory (ComfyUI needs it)"""
     import shutil
@@ -83,6 +104,7 @@ def start_comfyui():
     
     logger.info("🚀 Starting ComfyUI server...")
     ensure_comfyui_models_linked()
+    ensure_comfyui_custom_nodes_linked()
     ensure_comfyui_temp()
     start_time = time.time()
     
