@@ -38,22 +38,14 @@ RUN pip install --no-cache-dir \
     accelerate \
     transformers
 
-# Install ComfyUI (lightweight, models from network storage)
+# Install ComfyUI (latest stable)
 WORKDIR /ComfyUI
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git . && \
     pip install --no-cache-dir -r requirements.txt
 
-# Essential custom nodes for WAN
-RUN mkdir -p custom_nodes && cd custom_nodes && \
-    git clone https://github.com/kijai/ComfyUI-WanVideoWrapper.git && \
-    cd ComfyUI-WanVideoWrapper && \
-    pip install --no-cache-dir -r requirements.txt || echo "Requirements install completed with warnings"
-
-# Additional useful nodes
-RUN cd custom_nodes && \
-    git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
-    cd ComfyUI-VideoHelperSuite && \
-    pip install --no-cache-dir -r requirements.txt || echo "VideoHelper requirements completed"
+# Create custom_nodes directory but DON'T install WAN nodes yet
+# (they require cu130 which doesn't exist)
+RUN mkdir -p custom_nodes
 
 # Create symlinks to network storage (will be mounted at /workspace)
 RUN mkdir -p /ComfyUI/models && \
