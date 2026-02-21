@@ -1,15 +1,24 @@
-# RunPod Serverless ComfyUI-WAN Demo
-# Using CUDA 12.4 + PyTorch stable (compatible with RunPod drivers)
+# ==============================================================================
+# RunPod Serverless ComfyUI-WAN - Config A (Stable)
+# ==============================================================================
+# Compatible: A100 80GB, A100 40GB, L40, RTX 4090
+# PyTorch: 2.4.0 stable avec CUDA 12.4
+# Testé: endpoint 48jzcfbsmucww8
+# ==============================================================================
+
 FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
 # Avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# RTX 5090 optimizations
-ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:512
-ENV TORCH_ALLOW_TF32_CUBLAS_OVERRIDE=0
-ENV CUDA_LAUNCH_BLOCKING=0
+# CUDA environment
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH="${CUDA_HOME}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
+
+# PyTorch memory optimizations (safe defaults)
+ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # System packages
 RUN apt-get update && apt-get install -y \
@@ -22,9 +31,13 @@ RUN apt-get update && apt-get install -y \
 RUN python3.10 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Core dependencies - PyTorch STABLE with cu124 (compatible with RunPod drivers)
+# Core dependencies - PyTorch STABLE cu124 (A100 compatible)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu124
+    pip install --no-cache-dir \
+    torch==2.4.0 \
+    torchvision==0.19.0 \
+    torchaudio==2.4.0 \
+    --index-url https://download.pytorch.org/whl/cu124
 
 # RunPod SDK and essential packages
 RUN pip install --no-cache-dir \
@@ -38,35 +51,23 @@ RUN pip install --no-cache-dir \
     accelerate \
     transformers
 
-# Install ComfyUI (latest stable)
+# Install ComfyUI
 WORKDIR /ComfyUI
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git . && \
     pip install --no-cache-dir -r requirements.txt
 
-# Create custom_nodes directory but DON'T install WAN nodes yet
-# (they require cu130 which doesn't exist)
-RUN mkdir -p custom_nodes
-
-# Create symlinks to network storage (will be mounted at /workspace)
+# Create empty directories (will be replaced by symlinks at runtime by handler)
+# IMPORTANT: Do NOT create /ComfyUI/temp here - handler creates it as a real dir
 RUN mkdir -p /ComfyUI/models && \
-    ln -sf /workspace/models/checkpoints /ComfyUI/models/checkpoints && \
-    ln -sf /workspace/models/loras /ComfyUI/models/loras && \
-    ln -sf /workspace/models/embeddings /ComfyUI/models/embeddings && \
-    ln -sf /workspace/models/upscale_models /ComfyUI/models/upscale_models && \
-    ln -sf /workspace/workflows /ComfyUI/workflows && \
+    mkdir -p /ComfyUI/custom_nodes && \
     mkdir -p /ComfyUI/output
-# Note: /ComfyUI/temp is NOT symlinked - ComfyUI manages it locally
 
 # Copy handler and utils
-COPY handler.py /handler.py
 COPY utils.py /utils.py
+COPY handler.py /handler.py
 
-# Expose ComfyUI port (internal)
+# Expose ComfyUI port (internal only - handler communicates via localhost)
 EXPOSE 8188
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
-    CMD python -c "import requests; requests.get('http://localhost:8188', timeout=5)" || exit 1
-
-# Start handler
+# Start handler (RunPod serverless entry point)
 CMD ["python", "-u", "/handler.py"]
