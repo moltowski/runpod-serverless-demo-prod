@@ -57,28 +57,66 @@ def setup_symlinks():
             os.symlink(target_path, link_path)
             logger.info(f"🔗 Symlink created: {link_path} -> {target_path}")
 
+def check_cuda_available():
+    """Verify CUDA is available and working"""
+    try:
+        import torch
+        cuda_available = torch.cuda.is_available()
+        if cuda_available:
+            cuda_version = torch.version.cuda
+            device_count = torch.cuda.device_count()
+            device_name = torch.cuda.get_device_name(0) if device_count > 0 else "Unknown"
+            logger.info(f"🔥 CUDA {cuda_version} available - {device_count} device(s)")
+            logger.info(f"🎮 PyTorch device: {device_name}")
+            return True, cuda_version, device_name
+        else:
+            logger.error("❌ CUDA not available in PyTorch!")
+            return False, None, None
+    except Exception as e:
+        logger.error(f"❌ Error checking CUDA: {e}")
+        return False, None, None
+
 def detect_gpu():
     """Detect GPU type and configure CUDA accordingly"""
     try:
         # Get GPU info from nvidia-smi
         result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            ["nvidia-smi", "--query-gpu=name,memory.total,driver_version", "--format=csv,noheader"],
             capture_output=True,
             text=True,
             timeout=5
         )
         
-        gpu_name = result.stdout.strip()
+        gpu_info = result.stdout.strip().split(",")
+        gpu_name = gpu_info[0].strip()
+        vram = gpu_info[1].strip() if len(gpu_info) > 1 else "Unknown"
+        driver = gpu_info[2].strip() if len(gpu_info) > 2 else "Unknown"
+        
         logger.info(f"🎮 GPU detected: {gpu_name}")
+        logger.info(f"💾 VRAM: {vram}")
+        logger.info(f"🔧 Driver: {driver}")
+        
+        # Check CUDA availability in PyTorch
+        cuda_ok, cuda_ver, torch_device = check_cuda_available()
+        if not cuda_ok:
+            logger.warning("⚠️ CUDA not available - may cause issues!")
         
         # Configuration spécifique par GPU
         if "5090" in gpu_name:
             logger.info("🔧 Configuring for RTX 5090...")
-            # Fix pour RTX 5090 : Force CUDA 12.4+ et disable certaines optimisations
+            
+            # RTX 5090 nécessite CUDA 12.4+ et drivers 550+
             os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-            os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-            # Disable TF32 qui peut causer des problèmes sur 5090
+            os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True,max_split_size_mb:512"
+            
+            # Disable TF32 et certaines optimisations qui peuvent causer des problèmes
             os.environ["TORCH_ALLOW_TF32_CUBLAS_OVERRIDE"] = "0"
+            os.environ["CUDA_LAUNCH_BLOCKING"] = "0"  # Async CUDA (plus rapide)
+            
+            # Memory optimizations
+            os.environ["PYTORCH_NO_CUDA_MEMORY_CACHING"] = "0"
+            
+            logger.info("✅ RTX 5090 optimizations applied")
             
         elif "4090" in gpu_name:
             logger.info("🔧 Configuring for RTX 4090...")
@@ -95,6 +133,29 @@ def detect_gpu():
         logger.warning(f"⚠️ Could not detect GPU: {e}")
         return "Unknown GPU"
 
+def check_comfyui_paths():
+    """Verify ComfyUI paths exist and are accessible"""
+    paths_to_check = [
+        (COMFY_DIR, "ComfyUI directory"),
+        (f"{COMFY_DIR}/main.py", "ComfyUI main.py"),
+        (f"{COMFY_DIR}/models", "Models directory (symlink)"),
+        (f"{COMFY_DIR}/custom_nodes", "Custom nodes (symlink)"),
+    ]
+    
+    all_ok = True
+    for path, description in paths_to_check:
+        if os.path.exists(path):
+            if os.path.islink(path):
+                target = os.readlink(path)
+                logger.info(f"✅ {description}: {path} -> {target}")
+            else:
+                logger.info(f"✅ {description}: {path}")
+        else:
+            logger.error(f"❌ {description} NOT FOUND: {path}")
+            all_ok = False
+    
+    return all_ok
+
 def start_comfyui():
     """Start ComfyUI server in background"""
     global comfy_process, comfy_ready
@@ -103,17 +164,38 @@ def start_comfyui():
         return 0
     
     logger.info("🚀 Starting ComfyUI server...")
+    
+    # Pre-checks
+    if not check_comfyui_paths():
+        logger.error("❌ ComfyUI paths check failed!")
+        return None
+    
     start_time = time.time()
     
     try:
-        # Launch ComfyUI
+        # Launch ComfyUI avec arguments optimisés
         logger.info(f"📂 ComfyUI directory: {COMFY_DIR}")
-        comfy_process = subprocess.Popen([
+        
+        # Args de base
+        comfy_args = [
             "python", f"{COMFY_DIR}/main.py",
             "--listen", "127.0.0.1",
-            "--port", "8188",
-            "--dont-print-server"
-        ], cwd=COMFY_DIR, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            "--port", "8188"
+        ]
+        
+        # Mode fast boot : skip custom nodes si nécessaire
+        # (peut être activé via env var pour debug)
+        if os.environ.get("COMFY_FAST_BOOT") == "1":
+            logger.warning("⚡ Fast boot mode: disabling custom nodes")
+            comfy_args.append("--disable-all-custom-nodes")
+        
+        comfy_process = subprocess.Popen(
+            comfy_args,
+            cwd=COMFY_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=os.environ.copy()  # Pass optimized env vars
+        )
         
         logger.info(f"🔄 ComfyUI process started (PID: {comfy_process.pid})")
         
