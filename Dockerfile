@@ -57,9 +57,9 @@ RUN mkdir -p /ComfyUI/models && \
     mkdir -p /ComfyUI/output && \
     ln -sf /workspace/temp /ComfyUI/temp
 
-# Copy handler
+# Copy handler and utils
 COPY handler.py /handler.py
-COPY utils.py /utils.py 2>/dev/null || true
+COPY utils.py /utils.py
 
 # Expose ComfyUI port (internal)
 EXPOSE 8188
