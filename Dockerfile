@@ -1,6 +1,6 @@
 # RunPod Serverless ComfyUI-WAN Demo (RTX 5090 Compatible)
-# Using CUDA 12.4 (latest available that supports RTX 5090)
-FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+# RTX 5090 requires CUDA 12.8+ and PyTorch nightly with cu129
+FROM nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04
 
 # Avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
