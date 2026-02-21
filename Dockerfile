@@ -54,8 +54,8 @@ RUN mkdir -p /ComfyUI/models && \
     ln -sf /workspace/models/embeddings /ComfyUI/models/embeddings && \
     ln -sf /workspace/models/upscale_models /ComfyUI/models/upscale_models && \
     ln -sf /workspace/workflows /ComfyUI/workflows && \
-    mkdir -p /ComfyUI/output && \
-    ln -sf /workspace/temp /ComfyUI/temp
+    mkdir -p /ComfyUI/output
+# Note: /ComfyUI/temp is NOT symlinked - ComfyUI manages it locally
 
 # Copy handler and utils
 COPY handler.py /handler.py
