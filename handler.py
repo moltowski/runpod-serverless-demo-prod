@@ -182,12 +182,8 @@ def start_comfyui():
             "--listen", "127.0.0.1",
             "--port", "8188",
             "--disable-cuda-malloc",  # Avoid CUDA memory issues
+            "--disable-all-custom-nodes",  # FORCE disable custom nodes from network volume
         ]
-        
-        # Mode fast boot : skip custom nodes si nécessaire
-        if os.environ.get("COMFY_FAST_BOOT") == "1":
-            logger.warning("⚡ Fast boot mode: disabling custom nodes")
-            comfy_args.append("--disable-all-custom-nodes")
         
         # Force disable comfy_kitchen CUDA backend (needs cu130)
         os.environ["COMFY_KITCHEN_DISABLE_CUDA"] = "1"
