@@ -183,6 +183,7 @@ def start_comfyui():
             "--port", "8188",
             "--disable-cuda-malloc",  # Avoid CUDA memory issues
             "--disable-all-custom-nodes",  # FORCE disable custom nodes from network volume
+            "--preview-method", "none",  # Disable preview to avoid event loop issues
         ]
         
         # Force disable comfy_kitchen CUDA backend (needs cu130)
