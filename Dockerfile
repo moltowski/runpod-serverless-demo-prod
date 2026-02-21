@@ -1,5 +1,6 @@
-# RunPod Serverless ComfyUI-WAN Demo (Network Storage Optimized)
-FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+# RunPod Serverless ComfyUI-WAN Demo (RTX 5090 Compatible)
+# CUDA 13.0+ required for RTX 5090
+FROM nvidia/cuda:13.0.0-cudnn8-devel-ubuntu22.04
 
 # Avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -16,9 +17,9 @@ RUN apt-get update && apt-get install -y \
 RUN python3.10 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Core dependencies
+# Core dependencies - PyTorch 2.5+ with CUDA 13.0
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+    pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
 
 # RunPod SDK and essential packages
 RUN pip install --no-cache-dir \
@@ -61,7 +62,7 @@ RUN mkdir -p /ComfyUI/models && \
 
 # Copy handler
 COPY handler.py /handler.py
-COPY utils.py /utils.py
+COPY utils.py /utils.py 2>/dev/null || true
 
 # Expose ComfyUI port (internal)
 EXPOSE 8188
