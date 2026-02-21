@@ -180,14 +180,18 @@ def start_comfyui():
         comfy_args = [
             "python", f"{COMFY_DIR}/main.py",
             "--listen", "127.0.0.1",
-            "--port", "8188"
+            "--port", "8188",
+            "--disable-cuda-malloc",  # Avoid CUDA memory issues
         ]
         
         # Mode fast boot : skip custom nodes si nécessaire
-        # (peut être activé via env var pour debug)
         if os.environ.get("COMFY_FAST_BOOT") == "1":
             logger.warning("⚡ Fast boot mode: disabling custom nodes")
             comfy_args.append("--disable-all-custom-nodes")
+        
+        # Force disable comfy_kitchen CUDA backend (needs cu130)
+        os.environ["COMFY_KITCHEN_DISABLE_CUDA"] = "1"
+        os.environ["COMFY_DISABLE_CUDA_KERNEL"] = "1"
         
         comfy_process = subprocess.Popen(
             comfy_args,
@@ -218,10 +222,13 @@ def start_comfyui():
                     # Try to get stderr
                     try:
                         stderr = comfy_process.stderr.read().decode('utf-8')
+                        stdout = comfy_process.stdout.read().decode('utf-8')
                         if stderr:
-                            logger.error(f"ComfyUI stderr: {stderr[:500]}")
-                    except:
-                        pass
+                            logger.error(f"ComfyUI stderr:\n{stderr[:2000]}")
+                        if stdout:
+                            logger.info(f"ComfyUI stdout:\n{stdout[:2000]}")
+                    except Exception as e:
+                        logger.error(f"Could not read process output: {e}")
                     return None
             
             try:
