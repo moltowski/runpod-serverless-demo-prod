@@ -216,14 +216,19 @@ def start_comfyui():
                 # Check if process is still running
                 if comfy_process.poll() is not None:
                     logger.error(f"❌ ComfyUI process died (exit code: {comfy_process.returncode})")
-                    # Try to get stderr
+                    # Try to get stderr/stdout - CAPTURE COMPLET
                     try:
-                        stderr = comfy_process.stderr.read().decode('utf-8')
-                        stdout = comfy_process.stdout.read().decode('utf-8')
+                        stderr = comfy_process.stderr.read().decode('utf-8', errors='replace')
+                        stdout = comfy_process.stdout.read().decode('utf-8', errors='replace')
+                        
+                        # Log TOUT le stderr (pas de limite)
                         if stderr:
-                            logger.error(f"ComfyUI stderr:\n{stderr[:2000]}")
+                            logger.error(f"ComfyUI FULL stderr:\n{stderr}")
+                        
+                        # Log TOUT le stdout (pas de limite)
                         if stdout:
-                            logger.info(f"ComfyUI stdout:\n{stdout[:2000]}")
+                            logger.info(f"ComfyUI FULL stdout:\n{stdout}")
+                        
                     except Exception as e:
                         logger.error(f"Could not read process output: {e}")
                     return None
