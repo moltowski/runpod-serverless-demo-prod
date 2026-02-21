@@ -22,9 +22,9 @@ RUN apt-get update && apt-get install -y \
 RUN python3.10 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Core dependencies - PyTorch NIGHTLY with CUDA 12.4 (needed for RTX 5090 sm_120)
+# Core dependencies - PyTorch NIGHTLY (needed for RTX 5090 sm_120 support)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu124
+    pip install --no-cache-dir --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu121
 
 # RunPod SDK and essential packages
 RUN pip install --no-cache-dir \
