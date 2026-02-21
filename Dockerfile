@@ -1,10 +1,15 @@
 # RunPod Serverless ComfyUI-WAN Demo (RTX 5090 Compatible)
-# CUDA 13.0+ required for RTX 5090
-FROM nvidia/cuda:13.0.0-cudnn8-devel-ubuntu22.04
+# Using CUDA 12.4 (latest available that supports RTX 5090)
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
 # Avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
+
+# RTX 5090 optimizations
+ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:512
+ENV TORCH_ALLOW_TF32_CUBLAS_OVERRIDE=0
+ENV CUDA_LAUNCH_BLOCKING=0
 
 # System packages
 RUN apt-get update && apt-get install -y \
@@ -17,9 +22,9 @@ RUN apt-get update && apt-get install -y \
 RUN python3.10 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Core dependencies - PyTorch 2.5+ with CUDA 13.0
+# Core dependencies - PyTorch 2.4+ with CUDA 12.4
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
+    pip install --no-cache-dir torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu124
 
 # RunPod SDK and essential packages
 RUN pip install --no-cache-dir \
