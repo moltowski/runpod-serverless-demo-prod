@@ -6,8 +6,9 @@ on:
       - main
     paths:
       - 'Dockerfile'
-      - 'handler.py'
+      - 'handler*.py'
       - '.github/workflows/docker-build.yml'
+      - '*.json'
   workflow_dispatch:
 
 jobs:
