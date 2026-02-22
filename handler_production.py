@@ -279,9 +279,13 @@ try:
         outputs = []
         
         if "outputs" not in history_entry:
+            logger.warning("⚠️ No 'outputs' key in history entry")
             return outputs
         
         for node_id, node_output in history_entry["outputs"].items():
+            logger.info(f"🔍 Checking node {node_id}: {list(node_output.keys())}")
+            
+            # Handle standard images output
             if "images" in node_output:
                 for img in node_output["images"]:
                     filename = img["filename"]
@@ -298,11 +302,18 @@ try:
                             "path": file_path,
                             "filename": filename
                         })
+                        logger.info(f"✅ Found image/video: {filename}")
             
+            # Handle VHS_VideoCombine gifs output
             if "gifs" in node_output:
                 for gif in node_output["gifs"]:
                     filename = gif["filename"]
-                    file_path = f"{COMFY_OUTPUT}/{filename}"
+                    subfolder = gif.get("subfolder", "")
+                    
+                    if subfolder:
+                        file_path = f"{COMFY_OUTPUT}/{subfolder}/{filename}"
+                    else:
+                        file_path = f"{COMFY_OUTPUT}/{filename}"
                     
                     if os.path.exists(file_path):
                         outputs.append({
@@ -310,6 +321,10 @@ try:
                             "path": file_path,
                             "filename": filename
                         })
+                        logger.info(f"✅ Found gif: {filename}")
+        
+        if not outputs:
+            logger.warning(f"⚠️ No output files found in history. Scanned {len(history_entry['outputs'])} nodes.")
         
         return outputs
     
