@@ -62,7 +62,7 @@ RUN mkdir -p /ComfyUI/models && \
     mkdir -p /ComfyUI/custom_nodes && \
     mkdir -p /ComfyUI/output
 
-# Copy handler and utils
+# Copy handlers and utils
 COPY utils.py /utils.py
 COPY handler.py /handler.py
 COPY handler_debug.py /handler_debug.py
@@ -71,4 +71,4 @@ COPY handler_debug.py /handler_debug.py
 EXPOSE 8188
 
 # Start handler (RunPod serverless entry point)
-CMD ["python", "-u", "/handler_debug.py"]
+CMD ["python", "-u", "/handler.py"]
