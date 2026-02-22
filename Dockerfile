@@ -67,6 +67,7 @@ COPY handler.py /handler.py
 COPY handler_debug.py /handler_debug.py
 COPY handler_safe.py /handler_safe.py
 COPY handler_final.py /handler_final.py
+COPY handler_production.py /handler_production.py
 COPY utils.py /utils.py
 
 # CRITICAL: Set Python unbuffered for logs
@@ -75,5 +76,5 @@ ENV PYTHONUNBUFFERED=1
 # Expose ComfyUI port
 EXPOSE 8188
 
-# Start FINAL handler
-CMD ["python3", "-u", "/handler_final.py"]
+# Start PRODUCTION handler
+CMD ["python3", "-u", "/handler_production.py"]
