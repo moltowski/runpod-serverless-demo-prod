@@ -65,9 +65,10 @@ RUN mkdir -p /ComfyUI/models && \
 # Copy handler and utils
 COPY utils.py /utils.py
 COPY handler.py /handler.py
+COPY handler_debug.py /handler_debug.py
 
 # Expose ComfyUI port (internal only - handler communicates via localhost)
 EXPOSE 8188
 
 # Start handler (RunPod serverless entry point)
-CMD ["python", "-u", "/handler.py"]
+CMD ["python", "-u", "/handler_debug.py"]
