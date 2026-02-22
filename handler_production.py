@@ -60,6 +60,9 @@ try:
     COMFY_OUTPUT = f"{COMFY_DIR}/output"
     WORKFLOWS_BASE = f"{NETWORK_VOLUME}/workflow"
     
+    # Fallback: Check if workflow exists in root (bundled in Docker)
+    WORKFLOWS_FALLBACK = "/"
+    
     # Global state
     comfy_process = None
     comfy_ready = False
@@ -192,11 +195,17 @@ try:
     print("[9/10] Defining handler...", flush=True)
     
     def load_workflow(workflow_name):
-        """Load workflow JSON from network volume"""
+        """Load workflow JSON from network volume or fallback to bundled"""
+        # Try network volume first
         workflow_path = f"{WORKFLOWS_BASE}/{workflow_name}.json"
         
         if not os.path.exists(workflow_path):
-            raise FileNotFoundError(f"Workflow not found: {workflow_path}")
+            # Fallback to bundled workflow in Docker image
+            workflow_path = f"{WORKFLOWS_FALLBACK}{workflow_name}.json"
+            logger.info(f"Using bundled workflow: {workflow_path}")
+        
+        if not os.path.exists(workflow_path):
+            raise FileNotFoundError(f"Workflow not found: {workflow_name}.json (tried {WORKFLOWS_BASE} and {WORKFLOWS_FALLBACK})")
         
         with open(workflow_path, 'r') as f:
             return json.load(f)

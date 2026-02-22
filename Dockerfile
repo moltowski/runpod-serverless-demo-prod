@@ -62,13 +62,14 @@ RUN mkdir -p /ComfyUI/models && \
     mkdir -p /ComfyUI/custom_nodes && \
     mkdir -p /ComfyUI/output
 
-# Copy handlers
+# Copy handlers and workflows
 COPY handler.py /handler.py
 COPY handler_debug.py /handler_debug.py
 COPY handler_safe.py /handler_safe.py
 COPY handler_final.py /handler_final.py
 COPY handler_production.py /handler_production.py
 COPY utils.py /utils.py
+COPY wan-2.2.json /wan-2.2.json
 
 # CRITICAL: Set Python unbuffered for logs
 ENV PYTHONUNBUFFERED=1
