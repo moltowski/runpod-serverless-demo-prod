@@ -54,7 +54,7 @@
   "exposed_ports": [8188],
   "contact_info": {
     "name": "Jeff Mollet",
-    "email": "mollet.geoffrey@gmail.com"
+    "email": "user@example.com"
   },
   "version": "2.0.0",
   "changelog": "v2: Intégration workflow two-stage WAN, LoRA dynamic, network storage paths, metrics pour démo (2026-02-19)"

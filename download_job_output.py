@@ -9,14 +9,15 @@ import json
 import io
 import base64
 from pathlib import Path
+import os
 
 # Fix Windows console
 if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-API_KEY = "YOUR_RUNPOD_API_KEY_HERE"  # Get from RunPod console
-ENDPOINT_ID = "gbj9a010qzzwg2"
+API_KEY = os.getenv("RUNPOD_API_KEY", "YOUR_API_KEY_HERE")
+ENDPOINT_ID = os.getenv("ENDPOINT_ID", "YOUR_ENDPOINT_ID")
 OUTPUT_DIR = Path(__file__).parent / "outputs"
 
 def get_job_output(job_id):

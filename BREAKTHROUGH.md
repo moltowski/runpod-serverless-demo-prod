@@ -1,7 +1,7 @@
 # 🎉 BREAKTHROUGH - Première génération vidéo réussie !
 
 **Date** : 22 février 2026 07h30  
-**Endpoint** : `gbj9a010qzzwg2` (RunPod A100 80GB)  
+**Endpoint** : `YOUR_ENDPOINT_ID` (RunPod A100 80GB)  
 **Image Docker** : `moltowski/comfyui-serverless-demo:7e8028f`
 
 ## ✅ Ce qui fonctionne
@@ -81,7 +81,7 @@ Comfy-VFI done! 162 frames generated at resolution: torch.Size([3, 720, 720])
 - **Temps total de diagnostic** : ~6 heures (depuis 22 fév 00h00)
 - **Commits** : 8 commits majeurs
 - **Images Docker buildées** : 6 versions
-- **Endpoints testés** : 3 (bnodklwqzrmjv3, RTX Blackwell → gbj9a010qzzwg2, A100)
+- **Endpoints testés** : 3 (bnodklwqzrmjv3, RTX Blackwell → YOUR_ENDPOINT_ID, A100)
 - **Temps d'exécution vidéo** : 383s pour ~162 frames
 
 ## 🎯 Prochaines étapes

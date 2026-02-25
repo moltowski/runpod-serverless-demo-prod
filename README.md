@@ -47,4 +47,4 @@ Template publié sur RunPod Hub pour démo serverless WAN 2.2. Compatible pods +
 - Multi-GPU pour batch jobs.
 - Monitoring avec RunPod metrics.
 
-Fork/Contrib: Bienvenue ! Contact: mollet.geoffrey@gmail.com
+Fork/Contrib: Bienvenue ! Contact: user@example.com
