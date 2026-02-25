@@ -1,0 +1,44 @@
+# Secrets et credentials
+.env
+.env.*
+*.key
+*.pem
+*_key
+*_secret
+credentials.json
+
+# API keys et configs personnelles
+config.json
+secrets.json
+
+# Documentation interne avec infos sensibles
+CONTEXT.md
+OPENCLAW_CONTEXT.md
+*_INTERNAL.md
+
+# Outputs et fichiers générés
+outputs/
+*.mp4
+*.avi
+*.mov
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# IDE et OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temp et cache
+temp/
+cache/
+.pytest_cache/
